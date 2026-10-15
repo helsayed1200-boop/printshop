@@ -1,0 +1,107 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>PrintShop Manager</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root{--bg:#f4f5f8;--s:#fff;--t:#1b1f2a;--m:#6b7280;--b:#e3e6ec;--a:#2f5bea;--g:#16a34a;--r:#dc2626;--o:#d97706;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12141a;--s:#1c1f28;--t:#eceef3;--m:#9aa1b0;--b:#2d3140;--a:#6b8cff;--g:#34d399;--r:#f87171;--o:#fbbf24}}
+:root[data-theme="dark"]{--bg:#12141a;--s:#1c1f28;--t:#eceef3;--m:#9aa1b0;--b:#2d3140;--a:#6b8cff;--g:#34d399;--r:#f87171;--o:#fbbf24}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--t);font:15px system-ui,-apple-system,Segoe UI,sans-serif}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+header{position:sticky;top:env(safe-area-inset-top,0px);background:var(--s);border-bottom:1px solid var(--b);padding:10px 14px;display:flex;gap:8px;align-items:center;justify-content:space-between;z-index:5}
+nav{display:flex;gap:4px;overflow-x:auto;padding:8px 10px;background:var(--s);border-bottom:1px solid var(--b)}
+nav button{white-space:nowrap}main{padding:14px;max-width:1100px;margin:auto}
+button,select,input,textarea{font:inherit;color:var(--t);background:var(--s);border:1px solid var(--b);border-radius:8px;padding:8px 10px}
+button{cursor:pointer}button.p{background:var(--a);color:#fff;border-color:var(--a)}button.d{color:var(--r)}nav button.on{background:var(--a);color:#fff;border-color:var(--a)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.card{background:var(--s);border:1px solid var(--b);border-radius:12px;padding:12px}
+.k{cursor:pointer}.k b{display:block;font-size:22px;margin-top:2px}.k span,.m{color:var(--m);font-size:12px}
+.f{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}.f label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--m)}.f .w{grid-column:1/-1}
+.tw{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:13px}th,td{padding:8px;border-bottom:1px solid var(--b);text-align:left;white-space:nowrap}tr.r{cursor:pointer}
+.tag{padding:2px 8px;border-radius:99px;font-size:11px;background:var(--b)}.ok{color:var(--g)}.bad{color:var(--r)}.warn{color:var(--o)}
+h2,h3{margin:14px 0 8px}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+</style></head><body>
+<header><b>🖨️ PrintShop Manager</b><span class="row"><select id="role" onchange="V.role=this.value;go()"><option>Admin</option><option>Employee</option></select></span></header>
+<nav id="nav"></nav><main id="app"></main>
+<script>
+const $=s=>document.querySelector(s),T=['New Order','Design in Progress','Awaiting Design Approval','Design Approved','In Production / Printing','Ready for Installation','Installation in Progress','Installation Completed','Financial Settlement Pending','Completed & Fully Settled'];
+const TYPES=['Banner','Flex','Acrylic','Stickers','Digital Printing','Signage','3D Letters','Other'],DS=['Not started','In progress','Awaiting approval','Approved'],PS=['Not started','In progress','Delayed','Done'],IS=['Pending','In progress','Done'];
+const NT={new:'New order created',approval:'Design awaiting approval',deadline:'Deadline approaching',delay:'Printing delayed',ready:'Ready for installation',unpaid:'Installed, balance outstanding',overdue:'Order overdue',stale:'Order not updated'};
+let S={orders:[],audit:[],mail:[],seq:1000,emp:['Ali','Sara','Omar'],cfg:{to:'',lead:24,stale:7,on:Object.fromEntries(Object.keys(NT).map(k=>[k,true]))}};
+try{const x=localStorage.getItem('psm1');if(x)S=JSON.parse(x)}catch(e){}
+const V={tab:'dash',f:null,id:null,role:'Admin',q:{}},adm=()=>V.role==='Admin';
+const save=()=>{try{localStorage.setItem('psm1',JSON.stringify(S))}catch(e){}};
+const E=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const $$=n=>'$'+(+n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}),today=()=>new Date().toISOString().slice(0,10),now=()=>new Date().toISOString();
+const log=(o,m)=>{S.audit.unshift({t:now(),by:V.role,o,m});S.audit=S.audit.slice(0,300)};
+function C(o){const pc=o.w*o.l/1550.0031,ar=pc*o.qty,lin=o.l*o.qty/39.3701,pr=(o.mode==='lin'?lin:ar)*o.price,tot=pr+ +o.mat+ +o.des+ +o.inst+ +o.extra- +o.disc,paid=o.pay.reduce((a,p)=>a+p.amt,0);
+return{pc,ar,lin,pr,tot,paid,bal:tot-paid,ps:paid<=0?'Unpaid':paid+.005>=tot?'Fully Paid':'Partially Paid'}}
+function stage(o){const c=C(o);if(o.iS==='Done')return c.ps==='Fully Paid'?9:8;if(o.iS==='In progress')return 6;if(o.pS==='Done')return 5;if(o.pS!=='Not started')return 4;
+return o.dS==='Approved'?3:o.dS==='Awaiting approval'?2:o.dS==='In progress'?1:0}
+const overdue=o=>o.due<today()&&stage(o)<7,soon=o=>{const h=(new Date(o.due+'T23:59')-Date.now())/36e5;return h>=0&&h<=S.cfg.lead&&stage(o)<7};
+const stale=o=>stage(o)<9&&(Date.now()-new Date(o.upd))/864e5>S.cfg.stale;
+const F={all:()=>1,s0:o=>stage(o)==0,s1:o=>stage(o)==1,s2:o=>stage(o)==2,s3:o=>stage(o)==3,s4:o=>stage(o)==4,s5:o=>stage(o)==5,s6:o=>stage(o)==6,s7:o=>stage(o)==7,s8:o=>stage(o)==8,over:overdue,bal:o=>C(o).bal>.005};
+function go(){$('#nav').innerHTML=[['dash','Dashboard'],['orders','Orders'],['form','+ New Order'],['mail','Alerts & Email'],['rep','Reports'],['audit','Audit Log']].map(([k,l])=>`<button class="${V.tab===k?'on':''}" onclick="V.tab='${k}';${k=='form'?'V.id=null;':''}${k=='orders'?'V.f=null;':''}go()">${l}</button>`).join('');
+$('#role').value=V.role;({dash,orders,form,mail,rep,audit,detail})[V.tab]();window.scrollTo(0,0)}
+function dash(){const O=S.orders,c=O.map(C),sum=f=>c.reduce((a,x)=>a+f(x),0);
+const K=[['Total Orders',O.length,'all'],['New Orders',O.filter(F.s0).length,'s0'],['Designs in Progress',O.filter(F.s1).length,'s1'],['Awaiting Approval',O.filter(F.s2).length,'s2'],['Approved Designs',O.filter(F.s3).length,'s3'],['In Production',O.filter(F.s4).length,'s4'],['Ready for Installation',O.filter(F.s5).length,'s5'],['Installing',O.filter(F.s6).length,'s6'],['Installations Done',O.filter(F.s7).length,'s7'],['Awaiting Settlement',O.filter(F.s8).length,'s8'],['Overdue',O.filter(F.over).length,'over']];
+$('#app').innerHTML=`<div class="grid">${K.map(([l,v,k])=>`<div class="card k" onclick="V.f='${k}';V.tab='orders';go()"><span>${l}</span><b class="${k=='over'&&v?'bad':''}">${v}</b></div>`).join('')}
+<div class="card k" onclick="V.f='all';V.tab='orders';go()"><span>Total Sales</span><b>${$$(sum(x=>x.tot))}</b></div>
+<div class="card k" onclick="V.f='all';V.tab='orders';go()"><span>Payments Received</span><b class="ok">${$$(sum(x=>x.paid))}</b></div>
+<div class="card k" onclick="V.f='bal';V.tab='orders';go()"><span>Outstanding Balances</span><b class="warn">${$$(sum(x=>x.bal))}</b></div>
+<div class="card"><span>Total Printing Area</span><b>${sum(x=>x.ar).toFixed(2)} m²</b></div></div>`+(O.length?'':'<p class="m">No orders yet. Tap “+ New Order” to start.</p>')}
+function orders(){const q=V.q,L=S.orders.filter(o=>(!V.f||F[V.f](o))&&(!q.s||(o.id+o.name+o.phone+o.co).toLowerCase().includes(q.s.toLowerCase()))&&(!q.e||o.emp===q.e)&&(!q.p||C(o).ps===q.p)&&(!q.pr||o.pS===q.pr)&&(!q.i||o.iS===q.i)&&(!q.d||o.due<=q.d)&&(!q.od||o.date>=q.od));
+const sel=(k,a,l)=>`<select onchange="V.q.${k}=this.value;orders()"><option value="">${l}</option>${a.map(x=>`<option ${q[k]===x?'selected':''}>${x}</option>`).join('')}</select>`;
+$('#app').innerHTML=`<div class="row"><input placeholder="Search ID, customer, phone…" value="${E(q.s||'')}" onchange="V.q.s=this.value;orders()">${sel('e',S.emp,'Employee')}${sel('p',['Unpaid','Partially Paid','Fully Paid'],'Payment')}${sel('pr',PS,'Production')}${sel('i',IS,'Installation')}
+<label class="m">Delivery by <input type="date" value="${q.d||''}" onchange="V.q.d=this.value;orders()"></label><label class="m">Ordered from <input type="date" value="${q.od||''}" onchange="V.q.od=this.value;orders()"></label><button onclick="V.q={};V.f=null;orders()">Clear</button></div>
+${V.f&&V.f!='all'?`<p class="m">Dashboard filter active</p>`:''}<div class="card tw" style="margin-top:10px"><table><tr><th>Order ID</th><th>Customer</th><th>Phone</th><th>Job</th><th>W (in)</th><th>L (in)</th><th>Qty</th><th>Area (m²)</th><th>Design</th><th>Production</th><th>Installation</th><th>Total</th><th>Paid</th><th>Balance</th></tr>
+${L.map(o=>{const c=C(o);return`<tr class="r" onclick="V.id='${o.id}';V.tab='detail';go()"><td>${o.id}${overdue(o)?' <b class="bad">!</b>':''}</td><td>${E(o.name)}</td><td>${E(o.phone)}</td><td>${o.type}</td><td>${o.w}</td><td>${o.l}</td><td>${o.qty}</td><td>${c.ar.toFixed(3)}</td><td><span class="tag">${o.dS}</span></td><td><span class="tag">${o.pS}</span></td><td><span class="tag">${o.iS}</span></td><td>${$$(c.tot)}</td><td>${$$(c.paid)}</td><td class="${c.bal>.005?'warn':'ok'}">${$$(c.bal)}</td></tr>`}).join('')||'<tr><td colspan=14 class="m">No matching orders</td></tr>'}</table></div>`}
+function form(){const o=S.orders.find(x=>x.id===V.id)||{type:'Banner',mode:'sqm',date:today(),qty:1,price:0,mat:0,des:0,inst:0,extra:0,disc:0,emp:S.emp[0]},n=(k,l,st='0.01')=>`<label>${l}<input id="f_${k}" type="number" min="0" step="${st}" value="${o[k]??''}" oninput="prev()"></label>`;
+$('#app').innerHTML=`<h3>${V.id?'Edit '+V.id:'New Order'}</h3><div class="card f">
+<label>Customer Name*<input id="f_name" value="${E(o.name)}"></label><label>Phone*<input id="f_phone" type="tel" value="${E(o.phone)}"></label><label>Company / Project<input id="f_co" value="${E(o.co)}"></label>
+<label>Order Date<input id="f_date" type="date" value="${o.date}"></label><label>Expected Delivery*<input id="f_due" type="date" value="${o.due||''}"></label>
+<label>Job Type<select id="f_type">${TYPES.map(t=>`<option ${o.type===t?'selected':''}>${t}</option>`).join('')}</select></label>
+<label>Assigned Employee<select id="f_emp">${S.emp.map(t=>`<option ${o.emp===t?'selected':''}>${t}</option>`).join('')}</select></label>
+<label>Pricing<select id="f_mode" onchange="prev()"><option value="sqm" ${o.mode==='sqm'?'selected':''}>Per square meter</option><option value="lin" ${o.mode==='lin'?'selected':''}>Per linear meter</option></select></label>
+${n('w','Width (in)*')}${n('l','Length (in)*')}${n('qty','Pieces*','1')}${n('price','Price per m or m² ($)')}${n('mat','Material Cost ($)')}${n('des','Design Cost ($)')}${n('inst','Installation Cost ($)')}${n('extra','Additional Expenses ($)')}${n('disc','Discount ($)')}
+<label class="w">Job Description<textarea id="f_desc">${E(o.desc)}</textarea></label><label>Design / Reference file<input id="f_file" type="file"></label><label class="w">Notes<textarea id="f_notes">${E(o.notes)}</textarea></label>
+<div class="w card" id="pv"></div><div class="w row"><button class="p" onclick="saveOrder()">Save Order</button></div></div>`;prev()}
+function read(){const g=k=>$('#f_'+k).value,o={};['name','phone','co','date','due','type','emp','mode','desc','notes'].forEach(k=>o[k]=g(k).trim());['w','l','qty','price','mat','des','inst','extra','disc'].forEach(k=>o[k]=parseFloat(g(k))||0);return o}
+function prev(){const o=read();o.pay=[];const c=C(o);$('#pv').innerHTML=`<span class="m">Live calculation</span><br>Area/piece ${c.pc.toFixed(4)} m² · Total area <b>${c.ar.toFixed(3)} m²</b> · Linear ${c.lin.toFixed(2)} m<br>Printing ${$$(c.pr)} · <b>Total ${$$(c.tot)}</b>`}
+function saveOrder(){const o=read(),er=[];if(!o.name)er.push('Customer name');if(!o.phone)er.push('Phone');if(!o.due)er.push('Delivery date');if(o.w<=0||o.l<=0)er.push('Width and length must be > 0');if(o.qty<1||o.qty%1)er.push('Pieces must be a whole number ≥ 1');if(o.due&&o.due<o.date)er.push('Delivery before order date');
+const c=C({...o,pay:[]});if(c.tot<0)er.push('Discount exceeds total');if(er.length)return alert('Please fix: '+er.join(', '));
+const f=$('#f_file').files[0];let x=S.orders.find(y=>y.id===V.id);
+if(x){Object.assign(x,o);if(f)x.file=f.name;x.upd=now();log(x.id,'Order edited')}else{x={...o,id:'ORD-'+(++S.seq),dS:'Not started',pS:'Not started',iS:'Pending',pay:[],hist:[{t:now(),m:'Order created'}],file:f?f.name:'',upd:now()};S.orders.push(x);log(x.id,'Order created');queue('new',x)}
+save();V.id=x.id;V.tab='detail';go()}
+function detail(){const o=S.orders.find(x=>x.id===V.id);if(!o){V.tab='orders';return go()}const c=C(o),st=stage(o),sl=(k,a)=>`<select onchange="setF('${k}',this.value)">${a.map(v=>`<option ${o[k]===v?'selected':''}>${v}</option>`).join('')}</select>`;
+$('#app').innerHTML=`<div class="row"><button onclick="V.tab='orders';go()">← Back</button><button onclick="V.tab='form';go()">Edit</button>${adm()?`<button class="d" onclick="del()">Delete</button>`:''}</div>
+<h3>${o.id} · ${E(o.name)} <span class="tag">${T[st]}</span> ${overdue(o)?'<b class="bad">OVERDUE</b>':''}</h3>
+<div class="card"><p>${E(o.co)||'—'} · ${o.type} · ${E(o.phone)}<br>Ordered ${o.date} · Due ${o.due} · ${E(o.emp)}<br>${o.w}×${o.l} in × ${o.qty} = <b>${c.ar.toFixed(3)} m²</b> ${o.file?'· 📎'+E(o.file):''}</p><p class="m">${E(o.desc)} ${E(o.notes)}</p></div>
+<h3>Status (independent fields)</h3><div class="card f"><label>Design${sl('dS',DS)}</label><label>Production${sl('pS',PS)}</label><label>Installation${sl('iS',IS)}</label><label>Payment<b class="${c.ps=='Fully Paid'?'ok':'warn'}">${c.ps}</b></label><label class="w">Stage note<input id="sn" placeholder="Optional note saved with next change"></label></div>
+<h3>Financials</h3><div class="card">Printing ${$$(c.pr)} + Material ${$$(o.mat)} + Design ${$$(o.des)} + Install ${$$(o.inst)} + Extra ${$$(o.extra)} − Discount ${$$(o.disc)}<br><b>Total ${$$(c.tot)}</b> · Paid ${$$(c.paid)} · <b class="${c.bal>.005?'warn':'ok'}">Balance ${$$(c.bal)}</b></div>
+<h3>Payments</h3><div class="card f"><label>Amount ($)<input id="pa" type="number" min="0.01" step="0.01"></label><label>Date<input id="pd" type="date" value="${today()}"></label><label>Method<select id="pm"><option>Cash</option><option>Card</option><option>Bank Transfer</option><option>Other</option></select></label><label>Note<input id="pn"></label><button class="p" onclick="pay()">Record payment</button></div>
+<div class="card tw" style="margin-top:8px"><table><tr><th>Date</th><th>Amount</th><th>Method</th><th>Note</th></tr>${o.pay.map(p=>`<tr><td>${p.d}</td><td>${$$(p.amt)}</td><td>${p.m}</td><td>${E(p.n)}</td></tr>`).join('')||'<tr><td colspan=4 class="m">No payments yet</td></tr>'}</table></div>
+<h3>Timeline</h3><div class="card">${o.hist.map(h=>`<div class="m">${new Date(h.t).toLocaleString()} — <span style="color:var(--t)">${E(h.m)}</span></div>`).reverse().join('')}</div>`}
+function setF(k,v){const o=S.orders.find(x=>x.id===V.id),n=$('#sn').value;const b=stage(o);o[k]=v;o.upd=now();o.hist.push({t:now(),m:`${{dS:'Design',pS:'Production',iS:'Installation'}[k]} → ${v}${b!==stage(o)?' (stage: '+T[stage(o)]+')':''}${n?' — '+n:''}`});log(o.id,k+' → '+v);
+const a={dS:{'Awaiting approval':'approval'},pS:{Delayed:'delay'},iS:{}}[k][v];if(a)queue(a,o);if(stage(o)==5)queue('ready',o);if(stage(o)==8)queue('unpaid',o);save();detail()}
+function pay(){const o=S.orders.find(x=>x.id===V.id),a=parseFloat($('#pa').value),c=C(o);if(!(a>0))return alert('Enter a valid amount');if(a>c.bal+.005)return alert('Payment exceeds remaining balance ('+$$(c.bal)+')');
+o.pay.push({amt:a,d:$('#pd').value,m:$('#pm').value,n:$('#pn').value});o.upd=now();o.hist.push({t:now(),m:'Payment '+$$(a)});log(o.id,'Payment '+$$(a));save();detail()}
+function del(){if(confirm('Delete '+V.id+' permanently? This cannot be undone.')){S.orders=S.orders.filter(x=>x.id!==V.id);log(V.id,'Order deleted');save();V.tab='orders';go()}}
+function queue(t,o){if(!S.cfg.on[t])return;const key=t+'|'+o.id+'|'+(t=='deadline'||t=='overdue'?o.due:'');if(S.mail.some(m=>m.key===key))return;const c=C(o);
+S.mail.unshift({key,t:now(),to:S.cfg.to||'(no recipient set)',type:t,subject:`[${o.id}] ${NT[t]} – ${o.name}`,body:`Order ${o.id} | ${o.name} | ${o.type} | Status: ${T[stage(o)]} | Deadline: ${o.due} | Outstanding: ${$$(c.bal)} | Link: ${location.href.split('#')[0]}#${o.id}`,status:'Queued'})}
+function scan(){S.orders.forEach(o=>{if(soon(o))queue('deadline',o);if(overdue(o))queue('overdue',o);if(stale(o))queue('stale',o);if(o.dS==='Awaiting approval')queue('approval',o);if(o.pS==='Delayed')queue('delay',o)});save();mail()}
+function mail(){const O=S.orders,cn=f=>O.filter(f).length,cf=S.cfg;
+$('#app').innerHTML=`<div class="card" style="border-color:var(--o)"><b class="warn">Email sending needs a server.</b><p class="m">This page runs entirely in your browser, so it cannot hold SMTP credentials or confirm delivery. Reminders below are queued and logged; nothing is marked “Delivered”. Connect a backend (SMTP or an email API with secrets in environment variables and webhook delivery confirmation) to send them.</p></div>
+<h3>Settings ${adm()?'':'<span class="m">(admin only)</span>'}</h3><fieldset ${adm()?'':'disabled'} class="card f" style="border:1px solid var(--b)"><label class="w">Recipients (comma-separated)<input value="${E(cf.to)}" onchange="S.cfg.to=this.value;save()"></label><label>Remind before deadline (hours)<input type="number" min="1" value="${cf.lead}" onchange="S.cfg.lead=+this.value||24;save()"></label><label>Stale after (days)<input type="number" min="1" value="${cf.stale}" onchange="S.cfg.stale=+this.value||7;save()"></label>
+<div class="w">${Object.keys(NT).map(k=>`<label style="flex-direction:row;gap:6px;color:var(--t);font-size:14px"><input type="checkbox" ${cf.on[k]?'checked':''} onchange="S.cfg.on.${k}=this.checked;save()"> ${NT[k]}</label>`).join('')}</div></fieldset>
+<div class="row" style="margin-top:10px"><button class="p" onclick="scan()">Scan & queue reminders</button></div>
+<h3>Daily summary preview</h3><div class="card">New: ${cn(F.s0)} · In design: ${cn(F.s1)} · Awaiting approval: ${cn(F.s2)} · In production: ${cn(F.s4)} · Awaiting installation: ${cn(F.s5)} · Overdue: <b class="bad">${cn(F.over)}</b> · Installed awaiting payment: ${cn(F.s8)} · Outstanding: <b>${$$(O.reduce((a,o)=>a+C(o).bal,0))}</b></div>
+<h3>Notification log</h3><div class="card tw"><table><tr><th>Time</th><th>To</th><th>Subject</th><th>Status</th></tr>${S.mail.slice(0,50).map(m=>`<tr><td>${new Date(m.t).toLocaleString()}</td><td>${E(m.to)}</td><td>${E(m.subject)}</td><td><span class="tag">${m.status}</span></td></tr>`).join('')||'<tr><td colspan=4 class="m">Empty</td></tr>'}</table></div>`}
+function rep(){const p=V.per||'month',d=new Date(),from=new Date(d);if(p==='day')from.setHours(0,0,0,0);else if(p==='week')from.setDate(d.getDate()-7);else from.setMonth(d.getMonth()-1);const fs=from.toISOString().slice(0,10),L=S.orders.filter(o=>o.date>=fs),c=L.map(C),s=f=>c.reduce((a,x)=>a+f(x),0);
+const emp=S.emp.map(e=>{const l=L.filter(o=>o.emp===e);return`<tr><td>${e}</td><td>${l.length}</td><td>${l.filter(o=>stage(o)>=8).length}</td><td>${l.filter(overdue).length}</td></tr>`}).join('');
+$('#app').innerHTML=`<div class="row"><select onchange="V.per=this.value;rep()">${['day','week','month'].map(x=>`<option ${p===x?'selected':''} value="${x}">${{day:'Daily',week:'Weekly',month:'Monthly'}[x]}</option>`).join('')}</select><button onclick="csv()">Export Excel (CSV)</button><button onclick="print()">Export PDF (print)</button></div>
+<div class="grid" style="margin-top:10px">${[['Orders received',L.length],['Completed',L.filter(o=>stage(o)>=8).length],['Area printed',s(x=>x.ar).toFixed(2)+' m²'],['Sales',$$(s(x=>x.tot))],['Payments',$$(s(x=>x.paid))],['Outstanding',$$(s(x=>x.bal))],['Printing exp.',$$(s(x=>x.pr))],['Material exp.',$$(L.reduce((a,o)=>a+ +o.mat,0))],['Install exp.',$$(L.reduce((a,o)=>a+ +o.inst,0))],['Overdue',L.filter(overdue).length]].map(([l,v])=>`<div class="card"><span class="m">${l}</span><b style="display:block;font-size:19px">${v}</b></div>`).join('')}</div>
+<h3>Employee performance</h3><div class="card tw"><table><tr><th>Employee</th><th>Orders</th><th>Completed</th><th>Overdue</th></tr>${emp}</table></div>`}
+function csv(){const r=[['Order','Customer','Phone','Type','W in','L in','Qty','Area m2','Total USD','Paid USD','Balance USD','Stage']].concat(S.orders.map(o=>{const c=C(o);return[o.id,o.name,o.phone,o.type,o.w,o.l,o.qty,c.ar.toFixed(3),c.tot.toFixed(2),c.paid.toFixed(2),c.bal.toFixed(2),T[stage(o)]]}));
+const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(r.map(x=>x.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n'));a.download='orders.csv';a.click()}
+function audit(){$('#app').innerHTML=`<div class="card tw"><table><tr><th>Time</th><th>User</th><th>Order</th><th>Change</th></tr>${S.audit.map(a=>`<tr><td>${new Date(a.t).toLocaleString()}</td><td>${a.by}</td><td>${a.o}</td><td>${E(a.m)}</td></tr>`).join('')||'<tr><td colspan=4 class="m">No activity</td></tr>'}</table></div>`}
+go();
+</script></body></html>
